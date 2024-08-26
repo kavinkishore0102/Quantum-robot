@@ -1,0 +1,590 @@
+﻿S - Curve Code:
+
+
+#include <stdio.h>
+#include <stdlib.h>
+#include <math.h>
+
+
+struct point {
+    double x, y, z;
+};
+struct line {
+    float x1, y11, z1;
+    float x2, y2, z2;
+};
+
+
+struct straject {
+    double Vo;
+    double Vs;
+    double Ve;
+    double Acc_lineair;
+    double Acc_begin;
+    double Dcc_lineair;
+    double Dcc_end;
+    double As;
+    double Ds;
+    double T0;
+    double T1;
+    double T2;
+    double T3;
+    double Ttot;
+    double L1;
+    double L2;
+    double L3;
+    double Ltot;
+    double s_acc_concave;
+    double s_acc_convex;
+    double s_acc;
+    double s_steady;
+    double s_dcc_convex;
+    double s_dcc_concave;
+    double s_dcc;
+    double Acc_start_time;
+    double Dcc_end_time;
+};
+
+
+struct result {
+    double s;
+    double v;
+    double a;
+    double j;
+    double t;
+};
+struct line l;
+
+
+
+
+float Px[100000], Py[100000], Pz[100000], p1[100000];
+int g;
+float px, py, pz;
+double trajecttime, resolution = 0.001;
+double lenght, rs, rv, rj, ra, rt;
+double s_acc, s_steady, s_dcc, s_dcc_concave, s_acc_concave, s_acc_convex;
+double As, Ds, L1, T1, L2, T2, L3, T3, Ttot;
+int j = 0;
+float speed_mm_sec = 0;
+double vmax, vbegin, vend, accmax, dccmax, accbegin, dccend;
+double distance1, distance_time, vavg, velmax_i, accmax_i, vmax1, scurve_vmax, scurve_accel;
+double timestamp, t;
+
+
+float scurve(float speed);
+void unknown();
+void accperiod();
+void Acc_begin();
+void accperiod();
+void steady_period();
+void steady_period1();
+void dcc_period();
+void request();
+void acc_concave();
+void acc_inflection();
+void acc_convex();
+void acc_period();
+void dcc_convex();
+void dcc_inflection();
+void dcc_concave();
+void total_period();
+
+
+int main(void) {
+    float s;
+    l.x1 = 0.1;
+    l.y11 = 0.1;
+    l.z1 = 0.1;
+    l.x2 = 0.2;
+    l.y2 = 0.15;
+    l.z2 = 0.3;
+    s = scurve(0.001);
+}
+
+
+float scurve(float speed) {
+    speed_mm_sec = speed * 1000;
+    distance1 = sqrt(pow(l.x2 - l.x1, 2) + pow(l.y2 - l.y11, 2) + pow(l.z2 - l.z1, 2));
+    lenght = distance1;
+
+
+    distance_time = distance1 / speed_mm_sec;
+    vavg = distance1 / distance_time;
+    vmax1 = vavg * 2.0;
+    scurve_vmax = vmax1 * 2.0;
+    scurve_accel = scurve_vmax / distance_time;
+
+
+    vmax = scurve_vmax;
+    accmax = scurve_accel;
+    vbegin = 0;
+    vend = -(vmax);
+    dccmax = accmax;
+    accbegin = 0;
+    dccend = 0;
+
+
+    trajecttime = 0;
+    unknown();
+    trajecttime = rt;
+    g = trajecttime / resolution;
+    printf("\nrt=%lf\n", rt);
+    g = (int)trajecttime / resolution;
+    for (double i = 0; i < trajecttime; i += resolution) {
+        timestamp = i;
+        t = timestamp;
+        unknown();
+        px = l.x1 + ((l.x2 - l.x1) * (rs / lenght));
+        py = l.y11 + ((l.y2 - l.y11) * (rs / lenght));
+        pz = l.z1 + ((l.z2 - l.z1) * (rs / lenght));
+        p1[j] = (float)px;
+        Px[j] = px;
+        Py[j] = py;
+        Pz[j] = pz;
+        printf("%f  %f  %f\n", px,py,pz);
+        j++;
+    }
+    unknown();
+    return (float)(2 * g);
+}
+
+
+void unknown() {
+    double Ltot = lenght;
+
+
+    if (vbegin > vmax) {
+        vbegin = vmax;
+    }
+    if (vbegin < 0) {
+        vbegin = 0;
+    }
+
+
+    if (vend > vmax) {
+        vend = vmax;
+    }
+    if (vend < 0) {
+        vend = 0;
+    }
+
+
+    As = accmax * 2;
+    Ds = dccmax * 2;
+
+
+    L1 = ((vmax * vmax) - (vbegin * vbegin)) / As;
+    T1 = 2 * (vmax - vbegin) / As;
+
+
+    L3 = ((vmax * vmax) - (vend * vend)) / Ds;
+    T3 = 2 * (vmax - vend) / Ds;
+
+
+    L2 = lenght - L1 - L3;
+    T2 = L2 / vmax;
+    Ttot = T1 + T2 + T3;
+
+
+    if (L2 < 0) {
+        double TempVel = vmax;
+        for (double i = TempVel; i > 0; i -= 0.01) {
+            vmax = i;
+            L1 = ((vmax * vmax) - (vbegin * vbegin)) / As;
+            L3 = ((vmax * vmax) - (vend * vend)) / Ds;
+            L2 = Ltot - L1 - L3;
+            if (L2 > 0.00001) {
+                T1 = 2 * (vmax - vbegin) / As;
+                T3 = 2 * (vmax - vend) / Ds;
+                T2 = L2 / vmax;
+                Ttot = T1 + T2 + T3;
+                break;
+            }
+        }
+    }
+    accperiod();
+    steady_period();
+    dcc_period();
+    request();
+}
+
+
+void accperiod() {
+    double jm = 2 * As / T1;
+    if (accbegin >= (2 * accmax)) {
+        accbegin = (2 * accmax) - 0.1;
+    }
+    double Acc_start_time = accbegin / jm;
+    double time_to_remove = T1 - Acc_start_time;
+    s_acc_concave = ((vbegin + (As * As) / (6 * jm)) * As) / jm;
+    double t = T1 / 2;
+    double vh = vbegin + jm * (t * t) / 2;
+    if (T1 > 0) {
+        s_acc_concave = vbegin * t + jm * (t * t * t) / 6;
+        s_acc_convex = (vh * t) + (As * (t * t) / 2) - (jm * (t * t * t) / 6);
+        s_acc = ((vmax * vmax) - (vbegin * vbegin)) / As;
+        if (accbegin > 0) {
+            double ts = Acc_start_time;
+            double length = vbegin * ts + jm * (ts * ts * ts) / 6;
+            s_acc_concave -= length;
+            s_acc_convex = (vh * t) + (As * (t * t) / 2) - (jm * (t * t * t) / 6);
+            L1 = s_acc_concave + s_acc_convex;
+            double Ltot = L1 + L2 + L3;
+            T1 = T1 - time_to_remove;
+            Ttot = T1 + T2 + T3;
+            vbegin = vbegin + As * ts - jm * (ts * ts) / 2;
+        }
+    }
+}
+
+
+void steady_period() {
+    s_steady = vmax * T2;
+}
+
+
+void dcc_period() {
+    double jm = 2 * Ds / T3;
+    double th = T3 / 2;
+    double vh = vend + jm * (th * th) / 2;
+    s_dcc_concave = vend * th + jm * (th * th * th) / 6;
+    double s_dcc_convex = (vh * th) + (As * (th * th) / 2) - (jm * (th * th * th) / 6);
+    s_dcc = ((vmax * vmax) - (vend * vend)) / Ds;
+    if (dccend >= (2 * dccmax)) {
+        dccend = (2 * dccmax) - 0.1;
+    }
+    double Dcc_end_time = dccend / jm;
+    double time_to_remove = T3 - Dcc_end_time;
+    if (T3 > 0) {
+        if (dccend > 0) {
+            double te = Dcc_end_time;
+            double length = vend * te + jm * (te * te * te) / 6;
+            s_dcc_concave -= length;
+            L3 = s_dcc_concave + s_dcc_convex;
+            double Ltot = L1 + L2 + L3;
+            T3 = T3 - time_to_remove;
+            Ttot = T1 + T2 + T3;
+            vend = vend + jm * (te * te) / 2;
+        }
+    }
+}
+
+
+void request() {
+    if (timestamp >= 0 && timestamp < (T1 / 2)) {
+        double jm = 2 * As / T1;
+        rs = vbegin * t + jm * (t * t * t) / 6;
+        rv = vbegin + jm * (t * t) / 2;
+        ra = jm * t;
+        rj = jm;
+        rt = Ttot;            
+    }
+    if (timestamp == (T1 / 2)) {
+        double jm = 2 * As / T1;
+        rs = (vbegin + (As * As) / (6 * jm)) * As / jm;
+        rv = (vmax - vbegin) / 2;
+        ra = 2 * accmax;
+        rj = 0;
+        rt = Ttot;        
+    }
+    if (timestamp > (T1 / 2) && timestamp < T1) {
+        double jm = 2 * As / T1;
+        double th = T1 / 2;
+        double vh = vbegin + jm * (th * th) / 2;
+        t -= T1 / 2;
+        rs = (vh * t + As * (t * t) / 2 - jm * (t * t * t) / 6) + s_acc_concave;
+        rv = vh + As * t - jm * (t * t) / 2;
+        ra = As - jm * t;
+        rj = jm * -1;
+        rt = Ttot;
+    }
+    if (timestamp == T1) {
+        rs = ((vmax * vmax) - (vbegin * vbegin)) / As;
+        rv = vmax;
+        ra = 0;
+        rj = 0;
+        rt = Ttot;
+    }
+    if ((timestamp > T1 && timestamp <= (T1 + T2)) || (timestamp==T1+T2)){
+        t -= T1;
+        rs = vmax * t + s_acc;
+        rv = vmax;
+        ra = 0;
+        rj = 0;
+        rt = Ttot;
+    }
+
+
+    if (timestamp > T1 + T2 && timestamp <= (T1 + T2 + (T3 / 2))) {
+        double jm = 2 * Ds / T3;
+        double th = T3 / 2;
+        double vh = vend + jm * (th * th) / 2;
+        double tt = Ttot - th - t;
+        double s = vh * tt + Ds * (tt * tt) / 2 - jm * (tt * tt * tt) / 6;
+        rs = s_acc + s_steady + (s_dcc - (s_dcc_concave + s));
+        rv = vh + Ds * tt - jm * (tt * tt) / 2;
+        ra = (Ds - jm * tt) * -1;
+        rj = jm * -1;
+        rt = Ttot;
+    }
+    if (timestamp == T1 + T2 + (0.5 * T3)) {
+        double jm = 2 * As / T3;
+        double s = (vend + (As * As) / (6 * jm)) * As / jm;
+        rs = s_acc + s_steady + s;
+        rv = (vmax - vend) / 2;
+        ra = 2 * dccmax;
+        rj = 0;
+        rt = Ttot;
+    }
+    if (timestamp > (T1 + T2 + (T3 / 2)) && timestamp < Ttot) {
+        double jm = 2 * Ds / T3;
+        double tt = Ttot - t;
+        double s = vend * tt + jm * (tt * tt * tt) / 6;
+        rs = s_acc + s_steady + (s_dcc - s);
+        rv = vend + jm * (tt * tt) / 2;
+        ra = (jm * tt) * -1;
+        rj = jm;
+        rt = Ttot;
+    }
+    if (timestamp == Ttot) {
+        rs = s_acc + s_steady + s_dcc;
+        rv = vend;
+        ra = 0;
+        rj = 0;
+        rt = Ttot;
+    }
+}
+Output:
+
+
+0.100000  0.100000  0.100000
+0.100000  0.100000  0.100000
+0.100000  0.100000  0.100001
+0.100001  0.100001  0.100002
+0.100003  0.100001  0.100006
+0.100006  0.100003  0.100011
+0.100010  0.100005  0.100019
+0.100015  0.100008  0.100031
+0.100023  0.100011  0.100046
+0.100032  0.100016  0.100065
+0.100045  0.100022  0.100089
+0.100059  0.100030  0.100119
+0.100077  0.100038  0.100154
+0.100098  0.100049  0.100196
+0.100122  0.100061  0.100245
+0.100150  0.100075  0.100301
+0.100183  0.100091  0.100365
+0.100219  0.100109  0.100438
+0.100260  0.100130  0.100520
+0.100306  0.100153  0.100611
+0.100356  0.100178  0.100713
+0.100413  0.100206  0.100825
+0.100474  0.100237  0.100949
+0.100542  0.100271  0.101084
+0.100616  0.100308  0.101232
+0.100696  0.100348  0.101392
+0.100783  0.100392  0.101566
+0.100877  0.100439  0.101754
+0.100978  0.100489  0.101956
+0.101087  0.100543  0.102174
+0.101203  0.100602  0.102406
+0.101327  0.100664  0.102655
+0.101460  0.100730  0.102920
+0.101601  0.100801  0.103203
+0.101751  0.100876  0.103503
+0.101910  0.100955  0.103821
+0.102079  0.101039  0.104158
+0.102257  0.101129  0.104514
+0.102445  0.101223  0.104890
+0.102643  0.101322  0.105286
+0.102852  0.101426  0.105704
+0.103071  0.101536  0.106142
+0.103301  0.101651  0.106603
+0.103543  0.101771  0.107086
+0.103796  0.101898  0.107591
+0.104060  0.102030  0.108121
+0.104337  0.102169  0.108674
+0.104626  0.102313  0.109253
+0.104928  0.102464  0.109856
+0.105242  0.102621  0.110485
+0.105570  0.102785  0.111140
+0.105911  0.102955  0.111822
+0.106265  0.103133  0.112531
+0.106634  0.103317  0.113268
+0.107016  0.103508  0.114033
+0.107414  0.103707  0.114827
+0.107825  0.103913  0.115651
+0.108252  0.104126  0.116504
+0.108694  0.104347  0.117388
+0.109151  0.104575  0.118302
+0.109622  0.104811  0.119245
+0.110108  0.105054  0.120217
+0.110609  0.105304  0.121217
+0.111123  0.105561  0.122245
+0.111650  0.105825  0.123301
+0.112191  0.106096  0.124383
+0.112746  0.106373  0.125491
+0.113313  0.106656  0.126625
+0.113892  0.106946  0.127784
+0.114484  0.107242  0.128968
+0.115088  0.107544  0.130176
+0.115703  0.107852  0.131407
+0.116331  0.108165  0.132661
+0.116969  0.108484  0.133938
+0.117618  0.108809  0.135237
+0.118278  0.109139  0.136557
+0.118949  0.109474  0.137897
+0.119629  0.109815  0.139259
+0.120320  0.110160  0.140640
+0.121020  0.110510  0.142040
+0.121729  0.110865  0.143459
+0.122448  0.111224  0.144896
+0.123175  0.111588  0.146351
+0.123911  0.111956  0.147822
+0.124655  0.112328  0.149311
+0.125408  0.112704  0.150815
+0.126168  0.113084  0.152335
+0.126935  0.113468  0.153870
+0.127710  0.113855  0.155420
+0.128491  0.114246  0.156983
+0.129280  0.114640  0.158559
+0.130074  0.115037  0.160149
+0.130875  0.115438  0.161751
+0.131682  0.115841  0.163364
+0.132494  0.116247  0.164989
+0.133312  0.116656  0.166624
+0.134135  0.117067  0.168270
+0.134963  0.117481  0.169925
+0.135795  0.117897  0.171589
+0.136631  0.118316  0.173262
+0.137472  0.118736  0.174943
+0.138316  0.119158  0.176631
+0.139163  0.119582  0.178327
+0.140014  0.120007  0.180028
+0.140868  0.120434  0.181736
+0.141724  0.120862  0.183449
+0.142583  0.121292  0.185167
+0.143444  0.121722  0.186889
+0.144307  0.122154  0.188614
+0.145172  0.122586  0.190343
+0.146037  0.123019  0.192075
+0.146904  0.123452  0.193808
+0.147772  0.123886  0.195544
+0.148640  0.124320  0.197280
+0.149509  0.124754  0.199017
+0.150377  0.125189  0.200754
+0.151246  0.125623  0.202491
+0.152114  0.126057  0.204228
+0.152982  0.126491  0.205963
+0.153849  0.126924  0.207697
+0.154714  0.127357  0.209429
+0.155579  0.127790  0.211158
+0.156442  0.128221  0.212884
+0.157303  0.128652  0.214607
+0.158163  0.129081  0.216325
+0.159019  0.129510  0.218039
+0.159874  0.129937  0.219747
+0.160725  0.130362  0.221450
+0.161573  0.130786  0.223146
+0.162418  0.131209  0.224835
+0.163258  0.131629  0.226517
+0.164095  0.132048  0.228191
+0.164928  0.132464  0.229856
+0.165756  0.132878  0.231513
+0.166580  0.133290  0.233160
+0.167398  0.133699  0.234796
+0.168211  0.134106  0.236423
+0.169019  0.134509  0.238038
+0.169820  0.134910  0.239641
+0.170616  0.135308  0.241232
+0.171405  0.135703  0.242810
+0.172188  0.136094  0.244375
+0.172963  0.136482  0.245927
+0.173732  0.136866  0.247463
+0.174493  0.137246  0.248985
+0.175246  0.137623  0.250492
+0.175991  0.137996  0.251983
+0.176728  0.138364  0.253457
+0.177457  0.138728  0.254914
+0.178177  0.139088  0.256353
+0.178887  0.139444  0.257774
+0.179589  0.139794  0.259177
+0.180280  0.140140  0.260561
+0.180962  0.140481  0.261925
+0.181634  0.140817  0.263268
+0.182295  0.141148  0.264591
+0.182946  0.141473  0.265892
+0.183586  0.141793  0.267172
+0.184215  0.142107  0.268429
+0.184832  0.142416  0.269664
+0.185437  0.142719  0.270875
+0.186031  0.143015  0.272061
+0.186612  0.143306  0.273224
+0.187181  0.143590  0.274361
+0.187736  0.143868  0.275473
+0.188279  0.144140  0.276558
+0.188809  0.144404  0.277617
+0.189325  0.144662  0.278649
+0.189827  0.144913  0.279653
+0.190314  0.145157  0.280629
+0.190788  0.145394  0.281576
+0.191247  0.145623  0.282494
+0.191691  0.145845  0.283381
+0.192119  0.146060  0.284239
+0.192533  0.146267  0.285066
+0.192932  0.146466  0.285864
+0.193317  0.146658  0.286633
+0.193687  0.146843  0.287374
+0.194043  0.147022  0.288087
+0.194386  0.147193  0.288772
+0.194715  0.147358  0.289431
+0.195031  0.147516  0.290063
+0.195335  0.147667  0.290670
+0.195625  0.147813  0.291251
+0.195904  0.147952  0.291808
+0.196170  0.148085  0.292340
+0.196425  0.148212  0.292849
+0.196668  0.148334  0.293335
+0.196899  0.148450  0.293799
+0.197120  0.148560  0.294240
+0.197330  0.148665  0.294660
+0.197529  0.148765  0.295059
+0.197719  0.148859  0.295438
+0.197898  0.148949  0.295796
+0.198068  0.149034  0.296136
+0.198228  0.149114  0.296456
+0.198379  0.149190  0.296759
+0.198522  0.149261  0.297044
+0.198656  0.149328  0.297311
+0.198781  0.149391  0.297562
+0.198898  0.149449  0.297797
+0.199008  0.149504  0.298016
+0.199110  0.149555  0.298220
+0.199205  0.149602  0.298410
+0.199293  0.149646  0.298585
+0.199374  0.149687  0.298748
+0.199448  0.149724  0.298897
+0.199517  0.149758  0.299034
+0.199580  0.149790  0.299159
+0.199636  0.149818  0.299273
+0.199688  0.149844  0.299376
+0.199734  0.149867  0.299469
+0.199776  0.149888  0.299552
+0.199813  0.149906  0.299626
+0.199846  0.149923  0.299691
+0.199874  0.149937  0.299749
+0.199899  0.149950  0.299798
+0.199920  0.149960  0.299841
+0.199939  0.149969  0.299877
+0.199954  0.149977  0.299907
+0.199966  0.149983  0.299932
+0.199976  0.149988  0.299952
+0.199984  0.149992  0.299968
+0.199990  0.149995  0.299979
+0.199994  0.149997  0.299988
+0.199997  0.149998  0.299994
+0.199999  0.149999  0.299997
+0.200000  0.150000  0.299999
+0.200000  0.150000  0.300000
+0.200000  0.150000  0.300000
